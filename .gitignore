@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+bin/
+obj/
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Environment and secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Project folders (raws, panels, cache etc. created inside project dir)
+data/
+projects/*/raws/
+projects/*/stitched/
+projects/*/panels/
+projects/*/timeline/
+projects/*/exports/
+projects/*/metadata/
+projects/*/cache/
+
+# Python caching & environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.ipynb_checkpoints
+
+# Prisma
+/apps/backend/prisma/migrations/

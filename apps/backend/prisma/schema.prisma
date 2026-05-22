@@ -1,0 +1,41 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Project {
+  id        String    @id @default(uuid())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  chapters  Chapter[]
+}
+
+model Chapter {
+  id          String   @id @default(uuid())
+  projectId   String
+  title       String
+  status      String   // PENDING, SLICED, FAILED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  panels      Panel[]
+}
+
+model Panel {
+  id          String   @id @default(uuid())
+  chapterId   String
+  panelNumber Int
+  filePath    String   // File path relative to backend root/storage
+  width       Int
+  height      Int
+  cropBox     String?  // JSON stringified coordinates { x, y, width, height }
+  isDeleted   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  chapter     Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+}
