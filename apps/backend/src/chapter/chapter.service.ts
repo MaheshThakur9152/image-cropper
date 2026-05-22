@@ -42,21 +42,22 @@ export class ChapterService {
       // Create destination directories
       fs.mkdirSync(rawsChapterPath, { recursive: true });
       fs.mkdirSync(panelsChapterPath, { recursive: true });
-
       // 4. Extract or copy raw assets
       const isZip = fs.statSync(dto.importPath).isFile() && dto.importPath.endsWith('.zip');
       if (isZip) {
         const zip = new AdmZip(dto.importPath);
         zip.extractAllTo(rawsChapterPath, true);
+        // Flatten folder in case ZIP had a nested directory structure
+        this.flattenDirectory(rawsChapterPath, rawsChapterPath);
+        this.cleanupSubdirectories(rawsChapterPath);
       } else {
         // If it's a directory, copy files
         if (fs.statSync(dto.importPath).isDirectory()) {
-          this.copyImages(dto.importPath, rawsChapterPath);
+          this.flattenDirectory(dto.importPath, rawsChapterPath);
         } else {
           throw new BadRequestException('Import path is neither a ZIP file nor a folder');
         }
       }
-
       // 5. Invoke Python Sidecar StitchToon slicing
       const payload = {
         input_path: rawsChapterPath,
@@ -159,15 +160,33 @@ export class ChapterService {
     return chapter;
   }
 
-  private copyImages(srcDir: string, destDir: string) {
-    const files = fs.readdirSync(srcDir);
+  private flattenDirectory(dir: string, destDir: string) {
     const extRegex = /\.(jpg|jpeg|png|webp|bmp)$/i;
-    for (const file of files) {
-      const srcFile = path.join(srcDir, file);
-      const stat = fs.statSync(srcFile);
-      if (stat.isFile() && extRegex.test(file)) {
-        const destFile = path.join(destDir, file);
-        fs.copyFileSync(srcFile, destFile);
+    const traverse = (currentDir: string) => {
+      const items = fs.readdirSync(currentDir);
+      for (const item of items) {
+        const fullPath = path.join(currentDir, item);
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+          traverse(fullPath);
+        } else if (stat.isFile() && extRegex.test(item)) {
+          const destPath = path.join(destDir, item);
+          if (fullPath !== destPath) {
+            fs.copyFileSync(fullPath, destPath);
+          }
+        }
+      }
+    };
+    traverse(dir);
+  }
+
+  private cleanupSubdirectories(dir: string) {
+    const items = fs.readdirSync(dir);
+    for (const item of items) {
+      const fullPath = path.join(dir, item);
+      const stat = fs.statSync(fullPath);
+      if (stat.isDirectory()) {
+        fs.rmSync(fullPath, { recursive: true, force: true });
       }
     }
   }
