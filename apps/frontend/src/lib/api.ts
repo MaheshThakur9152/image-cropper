@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}/api${endpoint}`;
@@ -63,6 +63,10 @@ export const api = {
       request<any>(`/chapters/${id}/export`, {
         method: 'POST',
       }),
+    autoCrop: (id: string) =>
+      request<{ status: string; updatedCount: number }>(`/chapters/${id}/auto-crop`, {
+        method: 'POST',
+      }),
   },
   panels: {
     list: (chapterId: string, includeDeleted?: boolean) =>
@@ -88,6 +92,19 @@ export const api = {
       }),
     restore: (id: string) =>
       request<any>(`/panels/${id}/restore`, {
+        method: 'POST',
+      }),
+    duplicate: (id: string) =>
+      request<any>(`/panels/${id}/duplicate`, {
+        method: 'POST',
+      }),
+    detect: (id: string) =>
+      request<{
+        status: string;
+        panels: { x: number; y: number; width: number; height: number }[];
+        dialogues: { x: number; y: number; width: number; height: number }[];
+        smart_crops: { x: number; y: number; width: number; height: number }[];
+      }>(`/panels/${id}/detect`, {
         method: 'POST',
       }),
   },

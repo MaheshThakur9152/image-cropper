@@ -43,6 +43,38 @@ export class PanelService {
     });
   }
 
+  async detect(id: string) {
+    const panel = await this.prisma.panel.findUnique({ where: { id } });
+    if (!panel) {
+      throw new NotFoundException(`Panel with ID "${id}" not found`);
+    }
+
+    const absolutePath = path.join(this.storageBase, panel.filePath);
+    if (!fs.existsSync(absolutePath)) {
+      throw new NotFoundException(`Panel file not found on disk at: ${absolutePath}`);
+    }
+
+    try {
+      const response = await fetch(`${this.pythonApiUrl}/detect-panels`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image_path: absolutePath,
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Python sidecar detection failed: ${errText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error detecting panels/dialogues:', error);
+      throw new InternalServerErrorException(`Detection failed: ${error.message}`);
+    }
+  }
+
   async split(id: string, splitY: number) {
     const panel = await this.prisma.panel.findUnique({ where: { id } });
     if (!panel) {
@@ -296,6 +328,41 @@ export class PanelService {
         isDeleted: false,
         panelNumber: nextNum,
       },
+    });
+  }
+
+  async duplicate(id: string) {
+    const panel = await this.prisma.panel.findUnique({ where: { id } });
+    if (!panel) {
+      throw new NotFoundException(`Panel with ID "${id}" not found`);
+    }
+
+    const N = panel.panelNumber;
+
+    return await this.prisma.$transaction(async (tx) => {
+      // Shift subsequent panel numbers up by 1
+      await tx.panel.updateMany({
+        where: {
+          chapterId: panel.chapterId,
+          panelNumber: { gt: N },
+          isDeleted: false,
+        },
+        data: {
+          panelNumber: { increment: 1 },
+        },
+      });
+
+      // Create duplicated panel
+      return await tx.panel.create({
+        data: {
+          chapterId: panel.chapterId,
+          panelNumber: N + 1,
+          filePath: panel.filePath,
+          width: panel.width,
+          height: panel.height,
+          cropBox: panel.cropBox,
+        },
+      });
     });
   }
 }

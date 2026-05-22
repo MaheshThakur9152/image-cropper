@@ -95,10 +95,33 @@ export class ChapterService {
         throw new Error('Slicing completed, but no panels were generated');
       }
 
-      const panelData = imageFiles.map((file, idx) => {
+      const detectPanelCrop = async (file: string, idx: number) => {
         const absolutePath = path.join(panelsChapterPath, file);
         const relativePath = path.join('projects', projectId, 'panels', chapter.id, file);
         const dimensions = sizeOf(fs.readFileSync(absolutePath));
+        let cropBox: string | null = null;
+
+        try {
+          const response = await fetch(`${this.pythonApiUrl}/detect-panels`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image_path: absolutePath }),
+          });
+          if (response.ok) {
+            const res = (await response.json()) as {
+              status: string;
+              smart_crops?: { x: number; y: number; width: number; height: number }[];
+            };
+            if (res.status === 'success' && res.smart_crops && res.smart_crops.length > 0) {
+              const largest = res.smart_crops.reduce((max, sc) =>
+                (sc.width * sc.height > max.width * max.height) ? sc : max
+              , res.smart_crops[0]);
+              cropBox = JSON.stringify(largest);
+            }
+          }
+        } catch (err) {
+          console.warn(`[Auto Crop] Failed to detect crop for ${file}:`, err);
+        }
 
         return {
           chapterId: chapter.id,
@@ -106,8 +129,19 @@ export class ChapterService {
           filePath: relativePath.replace(/\\/g, '/'), // use forward slashes for cross-platform
           width: dimensions.width || 0,
           height: dimensions.height || 0,
+          cropBox,
         };
-      });
+      };
+
+      const panelData: any[] = [];
+      const batchSize = 10;
+      for (let i = 0; i < imageFiles.length; i += batchSize) {
+        const batch = imageFiles.slice(i, i + batchSize);
+        const batchResults = await Promise.all(
+          batch.map((file, batchIdx) => detectPanelCrop(file, i + batchIdx))
+        );
+        panelData.push(...batchResults);
+      }
 
       // Insert panels into DB
       await this.prisma.panel.createMany({
@@ -276,6 +310,65 @@ export class ChapterService {
       status: 'success',
       exportPath: exportPath.replace(/\\/g, '/'),
       totalPanels: activePanels.length
+    };
+  }
+
+  async autoCrop(chapterId: string) {
+    const chapter = await this.prisma.chapter.findUnique({
+      where: { id: chapterId },
+      include: { panels: true },
+    });
+    if (!chapter) {
+      throw new NotFoundException(`Chapter with ID "${chapterId}" not found`);
+    }
+
+    const activePanels = chapter.panels.filter((p) => !p.isDeleted);
+    let updatedCount = 0;
+
+    const autoCropPanel = async (panel: typeof chapter.panels[0]) => {
+      const absolutePath = path.join('d:\\manhwa', panel.filePath);
+      if (!fs.existsSync(absolutePath)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`${this.pythonApiUrl}/detect-panels`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_path: absolutePath }),
+        });
+
+        if (response.ok) {
+          const res = (await response.json()) as {
+            status: string;
+            smart_crops?: { x: number; y: number; width: number; height: number }[];
+          };
+          if (res.status === 'success' && res.smart_crops && res.smart_crops.length > 0) {
+            const largest = res.smart_crops.reduce((max, sc) =>
+              (sc.width * sc.height > max.width * max.height) ? sc : max
+            , res.smart_crops[0]);
+            
+            await this.prisma.panel.update({
+              where: { id: panel.id },
+              data: { cropBox: JSON.stringify(largest) },
+            });
+            updatedCount++;
+          }
+        }
+      } catch (err) {
+        console.warn(`[Auto Crop] Failed to detect crop for panel ${panel.id}:`, err);
+      }
+    };
+
+    const batchSize = 10;
+    for (let i = 0; i < activePanels.length; i += batchSize) {
+      const batch = activePanels.slice(i, i + batchSize);
+      await Promise.all(batch.map((panel) => autoCropPanel(panel)));
+    }
+
+    return {
+      status: 'success',
+      updatedCount,
     };
   }
 

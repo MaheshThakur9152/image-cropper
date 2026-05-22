@@ -24,6 +24,11 @@ export class ChapterController {
     return this.chapterService.exportChapter(id);
   }
 
+  @Post('chapters/:id/auto-crop')
+  autoCrop(@Param('id') id: string) {
+    return this.chapterService.autoCrop(id);
+  }
+
   @Get('projects/:projectId/metadata')
   getProjectMetadata(@Param('projectId') projectId: string) {
     return this.chapterService.getProjectMetadata(projectId);

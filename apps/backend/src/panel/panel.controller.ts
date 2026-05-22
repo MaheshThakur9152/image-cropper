@@ -21,6 +21,11 @@ export class PanelController {
     return this.panelService.crop(id, body.cropBox);
   }
 
+  @Post('panels/:id/detect')
+  detect(@Param('id') id: string) {
+    return this.panelService.detect(id);
+  }
+
   @Post('panels/:id/split')
   split(
     @Param('id') id: string,
@@ -44,5 +49,10 @@ export class PanelController {
   @Post('panels/:id/restore')
   restore(@Param('id') id: string) {
     return this.panelService.restore(id);
+  }
+
+  @Post('panels/:id/duplicate')
+  duplicate(@Param('id') id: string) {
+    return this.panelService.duplicate(id);
   }
 }
