@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -27,16 +28,12 @@ async def slice_images(req: SliceRequest):
   # Ensure output directory exists
   os.makedirs(req.output_path, exist_ok=True)
 
-  # Resolve path to stitchtoon executable in the virtual environment
-  venv_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-  stitchtoon_exe = os.path.join(venv_dir, ".venv", "Scripts", "stitchtoon.exe")
-  if not os.path.exists(stitchtoon_exe):
-    # Fallback to system path if not found in virtual environment Scripts
-    stitchtoon_exe = "stitchtoon"
-
-  # Construct command arguments
+  # Run StitchToon through the active Python interpreter so Windows does not
+  # depend on a missing console script on PATH.
   cmd = [
-    stitchtoon_exe,
+    sys.executable,
+    "-m",
+    "stitchtoon",
     "--no-progress",
     "-f", req.img_format,
     "-m", req.method,

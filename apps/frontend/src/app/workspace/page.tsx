@@ -101,6 +101,8 @@ export default function Workspace() {
   const [isDetecting, setIsDetecting] = useState(false);
   const [showDetectedOverlays, setShowDetectedOverlays] = useState(true);
 
+  const [zoomLevel, setZoomLevel] = useState(1);
+
   // Queries
   const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ['projects'],
@@ -700,6 +702,13 @@ export default function Workspace() {
           handlePanelDelete(activePanel);
         }
       }
+      // Enter -> Apply Crop
+      else if (e.key === 'Enter') {
+        if (croppingPanel && cropW > 0 && cropH > 0) {
+          e.preventDefault();
+          handleCropSave();
+        }
+      }
       // Escape key -> Close cropping modal
       else if (e.key === 'Escape') {
         if (croppingPanel) {
@@ -707,13 +716,40 @@ export default function Workspace() {
           setCroppingPanel(null);
         }
       }
+      // Zoom controls
+      else if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
+        if (croppingPanel) {
+          e.preventDefault();
+          setZoomLevel((prev) => Math.min(prev + 0.25, 4));
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        if (croppingPanel) {
+          e.preventDefault();
+          setZoomLevel((prev) => Math.max(prev - 0.25, 0.25));
+        }
+      }
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (croppingPanel) {
+          e.preventDefault();
+          if (e.deltaY < 0) {
+            setZoomLevel((prev) => Math.min(prev + 0.1, 4));
+          } else {
+            setZoomLevel((prev) => Math.max(prev - 0.1, 0.25));
+          }
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('wheel', handleWheel, { passive: false });
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('wheel', handleWheel);
     };
-  }, [activePanel, undoStack, redoStack, activeChapterId, croppingPanel]);
+  }, [activePanel, undoStack, redoStack, activeChapterId, croppingPanel, cropW, cropH]);
 
   return (
     <div className="flex flex-col h-screen bg-neutral-950 text-neutral-200 antialiased font-sans overflow-hidden">
@@ -1590,6 +1626,11 @@ export default function Workspace() {
 
               {/* Modal Toolbar (Undo, Redo, Duplicate, Delete) */}
               <div className="flex items-center space-x-2">
+                <div className="hidden lg:flex items-center px-3 mr-2 space-x-3 text-3xs font-medium text-neutral-500 border-r border-neutral-850">
+                   <span><kbd className="bg-neutral-800 px-1 py-0.5 rounded text-neutral-400 font-sans">Ctrl</kbd> + <kbd className="bg-neutral-800 px-1 py-0.5 rounded text-neutral-400 font-sans">Scroll</kbd> or <kbd className="bg-neutral-800 px-1 py-0.5 rounded text-neutral-400 font-sans">+/-</kbd> to Zoom</span>
+                   <span><kbd className="bg-neutral-800 px-1 py-0.5 rounded text-neutral-400 font-sans">Enter</kbd> to Apply</span>
+                   <span><kbd className="bg-neutral-800 px-1 py-0.5 rounded text-neutral-400 font-sans">Esc</kbd> to Close</span>
+                </div>
                 <button
                   onClick={handleUndo}
                   disabled={undoStack.length === 0}
@@ -1641,8 +1682,8 @@ export default function Workspace() {
             {/* Modal Body */}
             <div className="flex flex-1 overflow-hidden">
               {/* Canvas Viewport (Main Center) */}
-              <div className="flex-1 bg-neutral-950/40 flex items-center justify-center p-8 relative overflow-hidden group select-none">
-                <div className="absolute top-4 left-6 pointer-events-none z-10 bg-neutral-950/80 px-3 py-1.5 rounded-md border border-neutral-900 text-3xs text-neutral-400 flex items-center space-x-2">
+              <div className="flex-1 bg-neutral-950/40 flex justify-center p-4 relative overflow-y-auto overflow-x-hidden group select-none">
+                <div className="fixed top-20 left-6 pointer-events-none z-40 bg-neutral-950/80 px-3 py-1.5 rounded-md border border-neutral-900 shadow-lg text-3xs text-neutral-400 flex items-center space-x-2">
                   <span className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-pulse" />
                   <span>
                     {isDraggingBox
@@ -1653,12 +1694,12 @@ export default function Workspace() {
                   </span>
                 </div>
 
-                <div className="relative max-h-full max-w-full flex items-center justify-center overflow-hidden rounded border border-neutral-900 bg-neutral-950">
-                  <div className="relative">
+                <div className="relative w-full h-max rounded border border-neutral-900 bg-neutral-950 my-6 shadow-2xl transition-all duration-75" style={{ width: `${zoomLevel * 800}px`, maxWidth: 'none' }}>
+                  <div className="relative w-full">
                     <img
                       src={`${API_BASE}/${liveCroppingPanel.filePath}`}
                       alt={`Cropping Panel ${liveCroppingPanel.panelNumber}`}
-                      className={`max-h-[75vh] w-auto object-contain select-none ${
+                      className={`w-full h-auto object-contain select-none ${
                         isDraggingBox ? 'cursor-move' :
                         cropW > 20 && cropH > 20 ? 'cursor-move' :
                         'cursor-crosshair'
